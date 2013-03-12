@@ -3,6 +3,7 @@
 import sys
 import re
 import readline
+import argparse
 from time import sleep
 from telnetlib import Telnet
 from getpass import getpass
@@ -55,6 +56,7 @@ def interact(remote, local):
             except EOFError:
                 print('*** Connection closed by remote host ***')
                 break
+            log(text)
             parser.feed(text)
         if sys.stdin in rfd:
             line = sys.stdin.readline()
@@ -65,11 +67,7 @@ def interact(remote, local):
             sys.stdout.flush()
 
 
-if __name__ == '__main__':
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind("tcp://*:14256")
-
+def run_game(socket):
     auth = EAccess()
     username = raw_input('Enter your username: ')
     password = getpass()
@@ -88,3 +86,41 @@ if __name__ == '__main__':
     conn.write('\r\n')
 
     interact(conn, socket)
+
+def process_log(infile, socket):
+        print 'Waiting for connection.'
+        sleep(2)
+        parser_target = StormfrontParser(socket)
+
+        parser = etree.XMLParser(recover=True, target=parser_target)
+        parser.feed('<begin_parsing>')
+        with open(infile, 'r') as f:
+            for line in f.readlines():
+                #print line,
+                log(line)
+                parser.feed(line)
+
+def log(log_str):
+    global logfile
+    logfile.write(log_str)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Play Dragonrealms')
+    parser.add_argument('-f', '--file',
+        help='Parse a game log instead of connecting to the server.')
+    parser.add_argument('-l', '--log', default='/dev/null',
+        help='Output raw connection stream to log.')
+    args = parser.parse_args()
+
+    context = zmq.Context()
+    socket = context.socket(zmq.PUB)
+    socket.bind("tcp://*:14256")
+
+    with open(args.log, 'w') as output:
+        logfile = output
+        if args.file is None:
+            print 'Connecting to server!'
+            run_game(socket)
+        else:
+            print 'Parsing the log.'
+            process_log(args.file, socket)
