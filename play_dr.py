@@ -19,7 +19,7 @@ PLATFORM = '/FE:WIZARD /VERSION:1.0.1.22 /P:Python /XML'
 class StormfrontParser:
     events = []
     eventHandlerStack = []
-    consume_newline = False
+    data_str = ''
 
     def __init__(self, data_socket):
         self.data_socket = data_socket
@@ -28,12 +28,14 @@ class StormfrontParser:
         self.events.append((tag, attrib))
 
     def data(self, data):
-        if not self.consume_newline or str(data).rstrip('\n'):
-            self.data_socket.send('line %s' % str(data))
-            self.consume_newline = False
+        if str(data).rstrip('\n'):
+            self.data_str += str(data)
 
     def end(self, tag):
-        self.consume_newline = True
+        if self.data_str.strip():
+            self.data_socket.send_multipart(['text_data',
+                                             '\n%s' % self.data_str])
+            self.data_str = ''
 
     def close(self):
         events, self.events = self.events, []
@@ -96,7 +98,6 @@ def process_log(infile, socket):
         parser.feed('<begin_parsing>')
         with open(infile, 'r') as f:
             for line in f.readlines():
-                #print line,
                 log(line)
                 parser.feed(line)
 
